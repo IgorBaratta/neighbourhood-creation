@@ -36,6 +36,38 @@ int main(int argc, char* argv[])
     const std::vector<int>& dest = map->dest();
 
     // ------------------------------------------------------------
+    // Create a communicator using MPI_Dist_graph_create_adjacent with complete
+    // graph
+    // ------------------------------------------------------------
+    MPI_Barrier(comm);
+    {
+      const std::vector<int> src = map->src();
+      std::vector<int> recv_sizes(src.size(), 0);
+      std::vector<int> send_sizes(dest.size(), 0);
+      for (int i = 0; i < 100; i++)
+      {
+        dolfinx::common::Timer timer0("xx adjacent complete graph + alltoall");
+        MPI_Comm comm_dist_graph_adjacent;
+        int err = MPI_Dist_graph_create_adjacent(
+            comm, src.size(), src.data(), MPI_UNWEIGHTED, dest.size(),
+            dest.data(), MPI_UNWEIGHTED, MPI_INFO_NULL, false,
+            &comm_dist_graph_adjacent);
+        dolfinx::MPI::check_error(comm, err);
+
+        // Exchange number of indices to send/receive from each rank
+        send_sizes.reserve(1);
+        recv_sizes.reserve(1);
+        err = MPI_Neighbor_alltoall(send_sizes.data(), 1, MPI_INT,
+                                    recv_sizes.data(), 1, MPI_INT,
+                                    comm_dist_graph_adjacent);
+        dolfinx::MPI::check_error(comm, err);
+
+        timer0.stop();
+        MPI_Comm_free(&comm_dist_graph_adjacent);
+      }
+    }
+
+    // ------------------------------------------------------------
     // Create a communicator using MPI_Dist_graph_create_adjacent and compute
     // graph edges nbx
     // ------------------------------------------------------------
@@ -53,6 +85,7 @@ int main(int argc, char* argv[])
             &comm_dist_graph_adjacent);
         dolfinx::MPI::check_error(comm, err);
         timer0.stop();
+        MPI_Comm_free(&comm_dist_graph_adjacent);
       }
     }
 
