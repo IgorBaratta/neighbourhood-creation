@@ -1,0 +1,77 @@
+# Compiled Object files
+*.o
+*.ko
+*.obj
+*.elf
+
+# Compiled Static libraries
+*.a
+*.lib
+
+# Compiled Dynamic libraries
+*.so
+*.dll
+*.dylib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# CMake build directory
+build/
+
+# Visual Studio files
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.pdb
+*.ipdb
+*.obj
+*.idb
+*.pch
+*.sdf
+*.opensdf
+*.tlog
+*.log
+*.vspscc
+*.vssscc
+*.psess
+*.vsp
+*.vspx
+*.user
+*.userosscache
+*.suo
+*.cache
+*.ncb
+*.clw
+*.ilk
+*.mdmp
+*.map
+*.exp
+
+# Xcode files
+*.pbxproj
+*.xcworkspace
+*.xcuserstate
+project.xcworkspace/
+xcuserdata/
+
+# Eclipse files
+.settings/
+.project
+.cproject
+
+# Sublime Text files
+*.sublime-workspace
+
+# Qt Creator files
+*.pro.user
+*.pro.user.*
+
+# Other files
+*.swp
+*~
+.DS_Store
+
+*build/
