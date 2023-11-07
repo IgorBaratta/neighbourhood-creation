@@ -36,17 +36,37 @@ int main(int argc, char* argv[])
     const std::vector<int>& dest = map->dest();
 
     // ------------------------------------------------------------
-    // Create a communicator using MPI_Dist_graph_create_adjacent with complete
-    // graph
+    // Create a communicator using MPI_Dist_graph_create_adjacent
     // ------------------------------------------------------------
     MPI_Barrier(comm);
     {
-      const std::vector<int> src = map->src();
+      const std::vector<int>& src = map->src();
+      for (int i = 0; i < 100; i++)
+      {
+        dolfinx::common::Timer timer0("x0 MPI_Dist_graph_create_adjacent");
+        MPI_Comm comm_dist_graph_adjacent;
+        int err = MPI_Dist_graph_create_adjacent(
+            comm, src.size(), src.data(), MPI_UNWEIGHTED, dest.size(),
+            dest.data(), MPI_UNWEIGHTED, MPI_INFO_NULL, false,
+            &comm_dist_graph_adjacent);
+        dolfinx::MPI::check_error(comm, err);
+        timer0.stop();
+        MPI_Comm_free(&comm_dist_graph_adjacent);
+      }
+    }
+
+    // ------------------------------------------------------------
+    // Compute graph edges using non-blocking collectives and create
+    // a communicator using MPI_Dist_graph_create_adjacent
+    // ------------------------------------------------------------
+    MPI_Barrier(comm);
+    {
+      const std::vector<int>& src = map->src();
       std::vector<int> recv_sizes(src.size(), 0);
       std::vector<int> send_sizes(dest.size(), 0);
       for (int i = 0; i < 100; i++)
       {
-        dolfinx::common::Timer timer0("xx adjacent complete graph + alltoall");
+        dolfinx::common::Timer timer0("x1 alltoall + graph_create_adjacent");
         MPI_Comm comm_dist_graph_adjacent;
         int err = MPI_Dist_graph_create_adjacent(
             comm, src.size(), src.data(), MPI_UNWEIGHTED, dest.size(),
@@ -68,14 +88,14 @@ int main(int argc, char* argv[])
     }
 
     // ------------------------------------------------------------
-    // Create a communicator using MPI_Dist_graph_create_adjacent and compute
-    // graph edges nbx
+    // Compute graph edges using non-blocking nbx and create a communicator
+    // using MPI_Dist_graph_create_adjacent
     // ------------------------------------------------------------
     MPI_Barrier(comm);
     {
       for (int i = 0; i < 100; i++)
       {
-        dolfinx::common::Timer timer0("xx MPI_Dist_graph_create_adjacent");
+        dolfinx::common::Timer timer0("x2 NBX + graph_create_adjacent");
         MPI_Comm comm_dist_graph_adjacent;
         const std::vector<int> src
             = dolfinx::MPI::compute_graph_edges_nbx(comm, dest);
@@ -99,7 +119,7 @@ int main(int argc, char* argv[])
       for (int i = 0; i < 100; i++)
       {
         MPI_Comm comm_dist_graph;
-        dolfinx::common::Timer timer1("xx MPI_Dist_graph_create");
+        dolfinx::common::Timer timer1("x3 MPI_Dist_graph_create");
         int err = MPI_Dist_graph_create(
             MPI_COMM_WORLD, src.size(), src.data(), degrees.data(), dest.data(),
             MPI_UNWEIGHTED, MPI_INFO_NULL, 0, &comm_dist_graph);
