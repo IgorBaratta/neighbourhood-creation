@@ -34,53 +34,48 @@ int main(int argc, char* argv[])
     const std::vector<int>& dest = map->dest();
 
     MPI_Barrier(comm);
-    MPI_Comm neigh_comm;
-    dolfinx::common::Timer timer0("MPI_Dist_graph_create_adjacent");
+    MPI_Comm comm_dist_graph_adjacent;
+    dolfinx::common::Timer timer0("xx MPI_Dist_graph_create_adjacent");
     {
       const std::vector<int> src
           = dolfinx::MPI::compute_graph_edges_nbx(comm, dest);
       int err = MPI_Dist_graph_create_adjacent(
           comm, src.size(), src.data(), MPI_UNWEIGHTED, dest.size(),
-          dest.data(), MPI_UNWEIGHTED, MPI_INFO_NULL, false, &neigh_comm);
+          dest.data(), MPI_UNWEIGHTED, MPI_INFO_NULL, false,
+          &comm_dist_graph_adjacent);
       dolfinx::MPI::check_error(comm, err);
     }
     timer0.stop();
-    MPI_Comm_free(&neigh_comm);
 
     MPI_Barrier(comm);
-    dolfinx::common::Timer timer1("MPI_Dist_graph_create");
-    MPI_Comm neigh_comm_new;
+    std::vector<int> src{rank};
+    std::vector<int> degrees{dest.size()};
+    dolfinx::common::Timer timer1("xx MPI_Dist_graph_create");
+    MPI_Comm comm_dist_graph;
     {
       int err = MPI_Dist_graph_create(
-          comm, dest.size(), dest.data(), MPI_UNWEIGHTED, dest.size(),
-          dest.data(), MPI_UNWEIGHTED, MPI_INFO_NULL, false, &neigh_comm_new);
+          MPI_COMM_WORLD, src.size(), src.data(), degrees.data(), dest.data(),
+          MPI_UNWEIGHTED, MPI_INFO_NULL, 0, &comm_dist_graph);
       dolfinx::MPI::check_error(comm, err);
     }
     timer1.stop();
 
-    // Print table with information about mesh and communicator
-    std::cout << "Rank: " << rank << " Size: " << size << " N: " << n
-              << std::endl;
-
-    // Compute average number of neighbors per process
-    int num_neighbors = dest.size();
-    int total = 0;
-    MPI_Allreduce(&num_neighbors, &total, 1, MPI_INT, MPI_SUM, comm);
-
-    double avg = double(total) / size;
-    std::cout << "Average number of neighbors: " << avg << std::endl;
-
-    // wall, user and system time in seconds
-    std::array<double, 3> elapsed = timer.elapsed();
-
-    // Print timings
-    for (int i = 0; i < size; i++)
+    // Check whether the two communicators are the same
+    int same = 0;
+    MPI_Comm_compare(comm_dist_graph, comm_dist_graph_adjacent, &same);
+    if (same == MPI_UNEQUAL)
     {
-      MPI_Barrier(comm);
-      if (i == rank)
-        std::cout << "Rank " << rank << " - Wall time: " << elapsed[0]
-                  << std::endl;
+      std::cout << "Communicators are not the same" << std::endl;
+      return 1;
     }
+
+    // Free communicators
+    MPI_Comm_free(&comm_dist_graph);
+    MPI_Comm_free(&comm_dist_graph_adjacent);
+
+    // list timings
+    dolfinx::list_timings(comm, {dolfinx::TimingType::wall},
+                          dolfinx::Table::Reduction::max);
   }
   MPI_Finalize();
 }
