@@ -33,46 +33,80 @@ int main(int argc, char* argv[])
 
     // get index map
     std::shared_ptr<const common::IndexMap> map = mesh.topology()->index_map(0);
-
     const std::vector<int>& dest = map->dest();
 
+    // ------------------------------------------------------------
+    // Create a communicator using MPI_Dist_graph_create_adjacent and compute
+    // graph edges nbx
+    // ------------------------------------------------------------
     MPI_Barrier(comm);
-    MPI_Comm comm_dist_graph_adjacent;
-    dolfinx::common::Timer timer0("xx MPI_Dist_graph_create_adjacent");
     {
-      const std::vector<int> src
-          = dolfinx::MPI::compute_graph_edges_nbx(comm, dest);
-      int err = MPI_Dist_graph_create_adjacent(
-          comm, src.size(), src.data(), MPI_UNWEIGHTED, dest.size(),
-          dest.data(), MPI_UNWEIGHTED, MPI_INFO_NULL, false,
-          &comm_dist_graph_adjacent);
-      dolfinx::MPI::check_error(comm, err);
+      for (int i = 0; i < 100; i++)
+      {
+        dolfinx::common::Timer timer0("xx MPI_Dist_graph_create_adjacent");
+        MPI_Comm comm_dist_graph_adjacent;
+        const std::vector<int> src
+            = dolfinx::MPI::compute_graph_edges_nbx(comm, dest);
+        int err = MPI_Dist_graph_create_adjacent(
+            comm, src.size(), src.data(), MPI_UNWEIGHTED, dest.size(),
+            dest.data(), MPI_UNWEIGHTED, MPI_INFO_NULL, false,
+            &comm_dist_graph_adjacent);
+        dolfinx::MPI::check_error(comm, err);
+        timer0.stop();
+      }
     }
-    timer0.stop();
 
+    // ------------------------------------------------------------
+    // Create a communicator using MPI_Dist_graph_create
+    // ------------------------------------------------------------
     MPI_Barrier(comm);
     std::vector<int> src{rank};
-    std::vector<int> degrees{dest.size()};
-    dolfinx::common::Timer timer1("xx MPI_Dist_graph_create");
-    MPI_Comm comm_dist_graph;
+    std::vector<int> degrees{static_cast<int>(dest.size())};
     {
-      int err = MPI_Dist_graph_create(
-          MPI_COMM_WORLD, src.size(), src.data(), degrees.data(), dest.data(),
-          MPI_UNWEIGHTED, MPI_INFO_NULL, 0, &comm_dist_graph);
-      dolfinx::MPI::check_error(comm, err);
+      for (int i = 0; i < 100; i++)
+      {
+        MPI_Comm comm_dist_graph;
+        dolfinx::common::Timer timer1("xx MPI_Dist_graph_create");
+        int err = MPI_Dist_graph_create(
+            MPI_COMM_WORLD, src.size(), src.data(), degrees.data(), dest.data(),
+            MPI_UNWEIGHTED, MPI_INFO_NULL, 0, &comm_dist_graph);
+        dolfinx::MPI::check_error(comm, err);
+        timer1.stop();
+        MPI_Comm_free(&comm_dist_graph);
+      }
     }
-    timer1.stop();
 
+    // ------------------------------------------------------------
     // Check whether the two communicators are the same
-    int same = 0;
-    MPI_Comm_compare(comm_dist_graph, comm_dist_graph_adjacent, &same);
-    if (same == MPI_UNEQUAL)
+    // ------------------------------------------------------------
     {
-      std::cout << "Communicators are not the same" << std::endl;
-      return 1;
-    }
+      MPI_Comm comm_dist_graph;
+      MPI_Comm comm_dist_graph_adjacent;
+      {
+        const std::vector<int> src
+            = dolfinx::MPI::compute_graph_edges_nbx(comm, dest);
+        int err = MPI_Dist_graph_create_adjacent(
+            comm, src.size(), src.data(), MPI_UNWEIGHTED, dest.size(),
+            dest.data(), MPI_UNWEIGHTED, MPI_INFO_NULL, false,
+            &comm_dist_graph_adjacent);
+        dolfinx::MPI::check_error(comm, err);
+      }
+      {
+        int err = MPI_Dist_graph_create(
+            MPI_COMM_WORLD, src.size(), src.data(), degrees.data(), dest.data(),
+            MPI_UNWEIGHTED, MPI_INFO_NULL, 0, &comm_dist_graph);
+        dolfinx::MPI::check_error(comm, err);
+      }
 
-    {
+      // Check whether the two communicators are the same
+      int same = 0;
+      MPI_Comm_compare(comm_dist_graph, comm_dist_graph_adjacent, &same);
+      if (same == MPI_UNEQUAL)
+      {
+        std::cout << "Communicators are not the same" << std::endl;
+        return 1;
+      }
+
       // get neighbors and compare
       int indegree, outdegree, weighted;
       MPI_Dist_graph_neighbors_count(comm_dist_graph, &indegree, &outdegree,
@@ -118,20 +152,13 @@ int main(int argc, char* argv[])
         std::cout << "sources != sources_adj" << std::endl;
         return 1;
       }
+      // Free communicators
+      MPI_Comm_free(&comm_dist_graph);
+      MPI_Comm_free(&comm_dist_graph_adjacent);
     }
 
-    // Free communicators
-    MPI_Comm_free(&comm_dist_graph);
-    MPI_Comm_free(&comm_dist_graph_adjacent);
-
-    std::array<double, 3> elps = timer0.elapsed();
-    logger.register_timing("create_adjacent", elps[0], elps[1], elps[2]);
-
-    elps = timer1.elapsed();
-    logger.register_timing("create", elps[0], elps[1], elps[2]);
-
-    logger.list_timings(comm, {dolfinx::TimingType::wall},
-                        dolfinx::Table::Reduction::max);
+    dolfinx::list_timings(comm, {dolfinx::TimingType::wall},
+                          dolfinx::Table::Reduction::max);
   }
   MPI_Finalize();
 }

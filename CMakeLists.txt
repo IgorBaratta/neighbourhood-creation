@@ -4,7 +4,7 @@
 #
 cmake_minimum_required(VERSION 3.19)
 
-set(PROJECT_NAME demo_poisson_matrix_free)
+set(PROJECT_NAME neighbor_bench)
 project(${PROJECT_NAME} LANGUAGES C CXX)
 
 # Set C++20 standard
